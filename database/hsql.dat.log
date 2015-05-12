@@ -1,0 +1,3 @@
+/*C12*/SET SCHEMA PUBLIC
+alter table shopping_cart drop constraint UK_6ifgvc7g4pdspi6dnufv7idkf
+alter table shopping_cart add constraint UK_6ifgvc7g4pdspi6dnufv7idkf  unique (customer_fk)

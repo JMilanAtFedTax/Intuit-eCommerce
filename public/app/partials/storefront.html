@@ -1,0 +1,66 @@
+<div class="container">
+    <h1 class="text-center">Timeless Style</h1>
+    <h3 class="text-center">what all the cool kids are wearing today</h3>
+    <div ng-model="items">
+        <div class="col-md-3 item" ng-repeat="salesItem in model.company.salesItems">
+            <div class="thumbnail">
+
+                <img ng-src="../app/assets/{{salesItem.imageFile}}" alt="{{salesItem.imageFile}}">
+
+                <div class="caption">
+
+                    <!-- item detail -->
+                    <h5 class="pull-right">{{salesItem.tic}}</h5>
+                    <h5>TIC</h5>
+                    <h5 class="pull-right">{{salesItem.unitPrice | currency}}</h5>
+                    <h5>{{salesItem.name}}</h5>
+                    <h6 class="text-muted">{{salesItem.description}}</h6>
+
+                    <!-- add to cart -->
+                    <a class="btn btn-default pull-right"
+                       ng-click="addToCart(salesItem)"
+                       data-toggle="modal" data-target="#addedToCart">Add To Cart</a>
+
+                    <!-- cart add confirmation -->
+                    <div class="modal fade" id="addedToCart">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-body">
+                                    <button type="button" class="close" data-dismiss="modal">
+                                        <span aria-hidden="true">&times;</span>
+                                        <span class="sr-only">Close</span>
+                                    </button>
+                                    <h4>Your selection has been added to the cart.</h4>
+                                </div>
+                            </div><
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div><!--/.row-->
+    <div class="container col-md-12">
+        <div class="row">
+            <div class="container col-md-6 col-md-push-3 voffset4">
+                <div class="panel panel-info">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">Developer Note:</h3>
+                    </div>
+                    <div class="panel-body">
+                        <p>
+                            On the settings page, these descriptions and prices were synced to Quick Books by the small business
+                            owner.The Sales Items in this app also have an additional property <code>qboId</code>.
+                            This was updated during the sync proccess so that it references an items equivalent in
+                            Quick Books. We will use these <code>qboId</code> values to create a sales receipt later.
+                        </p>
+                        <h4>See it in the code:</h4>
+                        Server Side
+                        <pre>com.intuit.developer.sampleapp.ecommerce.qbo.QBOGateway</pre>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div><!--/.container-->

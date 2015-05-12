@@ -1,0 +1,285 @@
+<div ng-switch="shoppingCartView">
+    <div class="container" ng-switch-when="shoppingcart">
+        <table class="table ">
+            <thead>
+            <tr>
+                <th></th>
+                <th>Item</th>
+                <th style="text-align: right">Quantity</th>
+                <th style="text-align: right">Normal Price</th>
+                <th style="text-align: right">Promo Price ({{model.shoppingCart.promotionDiscount | percentage}})</th>
+                <th style="text-align: right">Tax Rate</th>
+                <th style="text-align: right">Tax Amt</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr ng-repeat="item in model.shoppingCartItems">
+                <td><img ng-src="../app/assets/Thumb-{{item.salesItem.imageFile}}" alt=""></td>
+                <td>{{item.salesItem.name}}<br>{{item.salesItem.description}}</td>
+                <td align="right">{{item.quantity}}</td>
+                <td align="right">{{item.salesItem.unitPrice | currency}}</td>
+                <td align="right">{{item.promotionPrice | currency}}</td>
+                <td align="right">{{item.taxRate}}</td>
+                <td align="right">{{item.taxAmount | currency}}</td>
+            </tr>
+            </tbody>
+        </table>
+        <hr>
+        <div class="container-fluid">
+            <div class="row">
+                <h5 class="col-sm-6">Subtotal</h5>
+                <h5 class="pull-right" style="text-align: right">{{model.shoppingCart.subTotal | currency}}</h5>
+            </div>
+            <div class="row">
+                <h5 class="col-sm-6">Promotion - 20%</h5>
+                <h5 class="pull-right" style="text-align: right">({{model.shoppingCart.promotionSavings | currency}})</h5>
+            </div>
+            <div class="row">
+                <h5 class="col-sm-6">Sales Tax</h5>
+                <h5 class="pull-right" style="text-align: right">{{model.shoppingCart.taxAmount | currency}}</h5>
+            </div>
+            <div class="row">
+                <h5 class="col-sm-6">Total</h5>
+                <h5 class="pull-right" style="text-align: right">{{model.shoppingCart.total | currency}}</h5>
+            </div>
+            <hr/>
+            <button type="button" class="btn btn-default col-sm-2 pull-right" ng-click="showView('checkout')">
+                Proceed to Checkout >>
+            </button>
+        </div>
+        <div class="container col-md-6 col-md-push-3 voffset4">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Developer Note:</h3>
+                </div>
+                <div class="panel-body">
+                    <p>
+                        This shopping cart is represented by a <code>ShoppingCart</code> object. Which contains references
+                        to sales items and calculates totals.
+                    </p>
+                    <h4>See it in the code</h4>
+                    Server Side:
+                    <pre>com.intuit.developer.sampleapp.ecommerce.domain.ShoppingCart</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container" ng-switch-when="checkout">
+        <div class="container">
+            <form class="form-horizontal" role="form" ng-submit="submitCharge()">
+                <h4>Credit Card Information</h4>
+                <div id="creditCardInformation" class="form-group">
+                    <label class="control-label col-sm-2 pull-left">Credit Card No.</label>
+                    <div class="col-sm-4">
+                        <input class="form-control" placeholder="{{creditCard.number}}" ng-disabled="true" >
+                    </div>
+                    <label class="control-label pull-left">CVC</label>
+                    <div class="col-sm-1">
+                        <input class="form-control" placeholder="{{creditCard.CVC}}" ng-disabled="true">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="col-sm-2 control-label pull-left">Expiration Date</label>
+
+                    <div class="col-sm-2">
+                        <input class="form-control" placeholder="{{creditCard.expMonth}}" ng-disabled="true">
+                    </div>
+                    <div class="col-sm-2">
+                        <input class="form-control" placeholder="{{creditCard.expYear}}" ng-disabled="true">
+                    </div>
+                </div>
+                <hr>
+
+                <h4>Billing and Shipping Information</h4>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label pull-left">Name</label>
+
+                    <div class="col-sm-4">
+                        <input class="form-control" placeholder="{{billingInfo.name}}" ng-disabled="true">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label pull-left">Address</label>
+
+                    <div class="col-sm-4">
+                        <input class="form-control" placeholder="{{billingInfo.address}}" ng-disabled="true">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label pull-left">City, State, Zip</label>
+
+                    <div class="col-sm-4">
+                        <input class="form-control" placeholder="{{billingInfo.cityStateZip}}" ng-disabled="true">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label pull-left">Email</label>
+                    <div class="col-sm-4">
+                        <input class="form-control" placeholder="{{billingInfo.email}}" ng-disabled="true">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="col-sm-2 control-label pull-left">Phone</label>
+
+                    <div class="col-sm-4">
+                        <input class="form-control" placeholder="{{billingInfo.phone}}" ng-disabled="true">
+                    </div>
+                </div>
+                <hr>
+            </form>
+            <div class="container-fluid">
+                <div class="row">
+                    <h5 class="col-sm-6">Subtotal</h5>
+                    <h5 class="pull-right" style="text-align: right">{{model.shoppingCart.subTotal | currency}}</h5>
+                </div>
+                <div class="row">
+                    <h5 class="col-sm-6">Promotion - 20%</h5>
+                    <h5 class="pull-right" style="text-align: right">({{model.shoppingCart.promotionSavings | currency}})</h5>
+                </div>
+                <div class="row">
+                    <h5 class="col-sm-6">Sales Tax</h5>
+                    <h5 class="pull-right" style="text-align: right">{{model.shoppingCart.taxAmount | currency}}</h5>
+                </div>
+                <div class="row">
+                    <h5 class="col-sm-6">Total</h5>
+                    <h5 class="pull-right" style="text-align: right">{{model.shoppingCart.total | currency}}</h5>
+                </div>
+                <div class="row">
+                    <button type="button" class="btn btn-default pull-left" ng-click="showView('shoppingcart')"><< Cancel</button>
+                    <button type="button" class="btn btn-default pull-right" ng-click="placeOrder()">Submit Order</button>
+                </div>
+            </div>
+            <div class="modal fade" id="loadingOrder">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-body">
+                            <button type="button" ng-show="orderMessage" class="close" data-dismiss="modal">
+                                <span aria-hidden="true">&times;</span>
+                                <span class="sr-only">Close</span>
+                            </button>
+                            <h1>Placing Order....</h1>
+                            <div class="spinner large center-block"></div>
+                            <div class="alert alert-danger" ng-show="orderMessage">{{orderMessage}}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container col-md-6 col-md-push-3 voffset4">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Developer Note:</h3>
+                </div>
+                <div class="panel-body">
+                    <p>
+                        The credit card information has been pre-filled with a test credit card that will work with
+                        our payments service. When the 'Submit Order' button is clicked. This information is sent to a
+                        PCI compliant payments server to be <b>tokenized</b>. This process will create a temporary unique
+                        identifier for the payment information. Because only the token-issuing server knows what the
+                        credit card information actually is, this token can be passed to this app's non-accredited
+                        server backend and used to charge the customer for the items.
+                    </p>
+                    <h4>See it in the code</h4>
+                    Client Side:
+                    <pre>public/js/controllers.js:277</pre>
+                    Server Side:
+                    <pre>com.intuit.developer.sampleapp.ecommerce.controllers.OrdersController</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container" ng-switch-when="confirm">
+        <h1>Sales Receipt <a ng-href="{{getSalesReceiptLinkUrl()}}" target="_blank">#{{orderResponse.orderNumber}}</a></h1>
+        <hr />
+        <div class="container col-md-6">
+            <address>
+                <h3>Billing Address:</h3>
+                <b>{{orderResponse.customerRef.name}}</b><br/>
+                {{orderResponse.billAddr.line1}}<br/>
+                <span ng-show="orderResponse.billAddr.line2">{{orderResponse.billAddr.line2}}<br/></span>
+                <span ng-show="orderResponse.billAddr.line3">{{orderResponse.billAddr.line3}}<br/></span>
+                <span ng-show="orderResponse.billAddr.line4">{{orderResponse.billAddr.line4}}<br/></span>
+                <span ng-show="orderResponse.billAddr.line5">{{orderResponse.billAddr.line5}}<br/></span>
+                {{orderResponse.billAddr.city}},
+                {{orderResponse.billAddr.countrySubDivisionCode}},
+                {{orderResponse.billAddr.postalCode}}
+            </address>
+        </div>
+        <div class="container col-md-6">
+            <address>
+                <h3>Shipping Address:</h3>
+                <b>{{orderResponse.customerRef.name}}</b><br/>
+                {{orderResponse.shipAddr.line1}}<br/>
+                <span ng-show="orderResponse.shipAddr.line2">{{orderResponse.shipAddr.line2}}<br/></span>
+                <span ng-show="orderResponse.shipAddr.line3">{{orderResponse.shipAddr.line3}}<br/></span>
+                <span ng-show="orderResponse.shipAddr.line4">{{orderResponse.shipAddr.line4}}<br/></span>
+                <span ng-show="orderResponse.shipAddr.line5">{{orderResponse.shipAddr.line5}}<br/></span>
+                {{orderResponse.shipAddr.city}},
+                {{orderResponse.shipAddr.countrySubDivisionCode}},
+                {{orderResponse.shipAddr.postalCode}}
+            </address>
+        </div>
+        <div class="container-fluid">
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th>Item</th>
+                    <th style="text-align: right">Quantity</th>
+                    <th style="text-align: right">Unit Price</th>
+                    <th style="text-align: right">Quantity Price</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr ng-repeat="line in orderResponse.lines | filter:{detailType:'SALES_ITEM_LINE_DETAIL'}">
+                    <td>{{line.description}}</td>
+                    <td align="right">{{line.salesItemLineDetail.qty}}</td>
+                    <td align="right">{{line.salesItemLineDetail.unitPrice | currency}}</td>
+                    <td align="right">{{line.amount | currency}}</td>
+                </tr>
+                </tbody>
+            </table>
+            <hr>
+            <div class="container col-md-4 col-md-offset-8">
+                <div class="row" ng-repeat="line in orderResponse.lines | filter:{detailType:'SUB_TOTAL_LINE_DETAIL'}">
+                    <h5 class="col-md-7">Subtotal</h5>
+                    <h5 class="col-md-5" style="text-align: right">{{line.amount | currency}}</h5>
+                </div>
+                <div class="row" ng-repeat="line in orderResponse.txnTaxDetail.taxLine">
+                    <h5 class="col-md-7">Sales Tax (Powered by TaxCloud)</h5>
+                    <h5 class="col-md-5" style="text-align: right">{{line.amount | currency}}</h5>
+                </div>
+                <div class="row" ng-repeat="line in orderResponse.lines | filter:{detailType:'DISCOUNT_LINE_DETAIL'}">
+                    <h5 class="col-md-7">Promotion - {{line.discountLineDetail.discountAmount}}%</h5>
+                    <h5 class="col-md-5" style="text-align: right">({{line.amount | currency}})</h5>
+                </div>
+                <div class="row">
+                    <h5 class="col-md-7">Total</h5>
+                    <h5 class="col-md-5" style="text-align: right">{{orderResponse.total | currency}}</h5>
+                </div>
+            </div>
+            <hr/>
+        </div>
+        <div class="container col-md-6 col-md-push-3 voffset4">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Developer Note:</h3>
+                </div>
+                <div class="panel-body">
+                    <p>
+                        You're looking at the SalesReceipt data that came directly from QuickBooks Online as a response
+                        to create the Sales Receipt. The Sales Receipt number is the Sales Receipt's "Doc Number" in Quick Books.
+                        Notice that it's possible to link directly to the Sales Receipt's page in QuickBooks Online.
+                    </p>
+                    <h4>See it in the code</h4>
+                    Client Side:
+                    <pre>public/app/js/controller.js</pre>
+                    <h4>See it in the code</h4>
+                    Server Side:
+                    <pre>com.intuit.developer.sampleapp.ecommerce.controllers.OrderResponse</pre>
+                    <pre>com.intuit.developer.sampleapp.ecommerce.controllers.OrderResponse</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

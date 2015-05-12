@@ -1,0 +1,511 @@
+package com.intuit.developer.sampleapp.ecommerce.test.unit.qbo;
+
+import com.intuit.developer.sampleapp.ecommerce.domain.*;
+import com.intuit.developer.sampleapp.ecommerce.domain.Company;
+import com.intuit.developer.sampleapp.ecommerce.domain.Customer;
+import com.intuit.developer.sampleapp.ecommerce.qbo.QBOGateway;
+import com.intuit.developer.sampleapp.ecommerce.qbo.QBOServiceFactory;
+import com.intuit.developer.sampleapp.ecommerce.repository.CustomerRepository;
+import com.intuit.developer.sampleapp.ecommerce.repository.SalesItemRepository;
+import com.intuit.ipp.core.IEntity;
+import com.intuit.ipp.data.*;
+import com.intuit.ipp.services.BatchOperation;
+import com.intuit.ipp.services.DataService;
+import com.intuit.ipp.services.QueryResult;
+import mockit.*;
+import mockit.integration.junit4.JMockit;
+import org.joda.money.CurrencyUnit;
+import org.joda.money.Money;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import java.math.BigDecimal;
+import java.util.*;
+
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+
+/**
+ * Created by akuchta on 8/27/14.
+ */
+@RunWith(JMockit.class)
+public class QBOGatewayUnitTests {
+    @Tested
+    QBOGateway gateway;
+
+    @Mocked
+    DataService dataService;
+
+    @Injectable
+    QBOServiceFactory qboServiceFactory;
+
+    @Injectable
+    CustomerRepository customerRepository;
+
+    @Injectable
+    SalesItemRepository salesItemRepository;
+
+    Company company;
+    Customer customer;
+
+    @Before
+    public void before() {
+        company = new Company();
+        company.setName("Foo");
+        company.setAccessToken("asdasdA");
+        company.setAccessTokenSecret("sfsfsdfsdfsdfs");
+
+        customer = new Customer("Bob", "Shmob", "a@a.com", "");
+        customer.setCompany(company);
+        company.addCustomer(customer);
+    }
+
+    @Test
+    public void testCreateItemInQBO_NoMatchFound() throws Exception {
+        //
+        // Establish a set of test data
+        //
+
+        // Create a sales item
+        final SalesItem salesItem = new SalesItem("Shirt", "It's a shirt", Money.of(CurrencyUnit.USD, 5.00), "");
+        salesItem.setQtyOnHand(new BigDecimal(5.0));
+        final String qboItemID = "1";
+
+	    //Create an income acount
+	    final Account incomeAccount = createAccount("1", "IncomeAccount", "The Income account", AccountTypeEnum.INCOME, AccountSubTypeEnum.SALES_OF_PRODUCT_INCOME);
+	    final ReferenceType incomeAccountRef = createAccountRef(incomeAccount);
+
+	    //Create an asset account
+	    final Account assetAccount = createAccount("2", "Asset Account", "The Asset Account", AccountTypeEnum.OTHER_CURRENT_ASSET, AccountSubTypeEnum.INVENTORY);
+	    final ReferenceType assetAccountRef = createAccountRef(assetAccount);
+
+	    //Create a cost of goods sold account
+	    final Account cogAccount = createAccount("3", "Cost of Goods Sold Account", "THE Cogs account.", AccountTypeEnum.COST_OF_GOODS_SOLD, AccountSubTypeEnum.SUPPLIES_MATERIALS_COGS);
+	    final ReferenceType cogAccountRef = createAccountRef(cogAccount);
+
+        // Create fake income Account query results
+        final QueryResult incomeAccountQueryResult = new QueryResult();
+	    incomeAccountQueryResult.setEntities(Arrays.asList(incomeAccount));
+
+        // Create fake asset Account query results
+        final QueryResult assetAccountQueryResult = new QueryResult();
+        assetAccountQueryResult.setEntities(Arrays.asList(assetAccount));
+
+        // Create fake cost of goods sold Account to query result
+        final QueryResult cogAccountQueryResult = new QueryResult();
+	    cogAccountQueryResult.setEntities(Arrays.asList(cogAccount));
+
+        final Item qboItem = new Item();
+        qboItem.setId(qboItemID);
+	    final QueryResult itemQueryResult = new QueryResult();
+	    itemQueryResult.setEntities(new ArrayList<Item>());    // intentionally empty result list
+
+        // Non Strict expectations, generally just mocking collaborators
+        new NonStrictExpectations() {{
+            // The QBO gateway will try to acquire a data service instance
+            qboServiceFactory.getDataService(salesItem.getCompany());
+            result = dataService;
+
+            dataService.executeQuery(withAny(anyString));
+            result = new Delegate() {
+                QueryResult executeQuery(String queryString) {
+                    // The dataService will try to execute a query for income accounts
+                    if (String.format(
+                                    QBOGateway.ACCOUNT_TYPE_QUERY,
+                                    AccountTypeEnum.INCOME.value(),
+                                    AccountSubTypeEnum.SALES_OF_PRODUCT_INCOME.value()).compareTo(queryString) == 0) {
+                        return incomeAccountQueryResult;
+                    } else if (String.format(
+                                    QBOGateway.ACCOUNT_TYPE_QUERY,
+                                    AccountTypeEnum.OTHER_CURRENT_ASSET.value(),
+                                    AccountSubTypeEnum.INVENTORY.value()).compareTo(queryString) == 0 ) {
+                        return assetAccountQueryResult;
+                    } else if (String.format(
+                                    QBOGateway.ACCOUNT_TYPE_QUERY,
+                                    AccountTypeEnum.COST_OF_GOODS_SOLD.value(),
+                                    AccountSubTypeEnum.SUPPLIES_MATERIALS_COGS.value()).compareTo(queryString) == 0) {
+                        return cogAccountQueryResult;
+                    } else {
+                        return itemQueryResult;
+                    }
+                }
+            };
+
+            // The data service will execute a batch operation
+            dataService.executeBatch(withAny(new BatchOperation()));
+            result = new Delegate() {
+                void executeBatch(BatchOperation batchOperation) {
+                    com.intuit.ipp.data.Item qboItem = new com.intuit.ipp.data.Item();
+                    qboItem.setId(qboItemID);
+                    batchOperation.getEntityResult().put(Long.toString(salesItem.getId()), qboItem);
+                }
+            };
+
+        }};
+
+        // Perform the actual operation under test
+        List<SalesItem> salesItems = new ArrayList<>();
+        salesItems.add(salesItem);
+        gateway.createItemsInQBO(salesItems);
+
+        //Check that the qbo item ID was correctly assigned to the sales Item
+        assertEquals(qboItemID, salesItem.getQboId());
+
+        // Explicitly verify things that SHOULD HAVE happened.
+        new Verifications() {{
+            BatchOperation passedInBatch;
+
+            // Explicitly verify that dataService.add must be called with a parameter that matches certain requirements
+            dataService.executeBatch(passedInBatch = withCapture());
+
+            List<String> bIds = passedInBatch.getBIds();
+            assertEquals(1, bIds.size());
+
+            Item qboItemPassed = (Item) passedInBatch.getBatchItemRequests().get(0).getIntuitObject().getValue();
+
+            // Compare Values of Domain Object and QBO entity
+            assertEquals(salesItem.getName(), qboItemPassed.getName());
+            assertEquals(salesItem.getDescription(), qboItemPassed.getDescription());
+            assertEquals(salesItem.getQtyOnHand(), qboItemPassed.getQtyOnHand());
+            assertEquals(salesItem.getUnitPrice().getAmount(), qboItemPassed.getUnitPrice());
+            // Check for explicit / special fields on the _QBO ENTITY_ that are not part of domain object but should be set
+            // as part of mapping
+            assertTrue(qboItemPassed.isTaxable());
+            assertTrue(qboItemPassed.isActive());
+            assertTrue(qboItemPassed.isTrackQtyOnHand());
+            assertFalse(qboItemPassed.isSalesTaxIncluded());
+            assertEquals(ItemTypeEnum.INVENTORY, qboItemPassed.getType());
+            assertNotNull(qboItemPassed.getInvStartDate());
+            assertNotNull(qboItemPassed.getQtyOnHand());
+
+            //Check that the correct account references were made
+            assertEquals(assetAccountRef, qboItemPassed.getAssetAccountRef());
+            assertEquals(incomeAccountRef, qboItemPassed.getIncomeAccountRef());
+            assertEquals(cogAccountRef, qboItemPassed.getExpenseAccountRef());
+
+            // The salesItemRepository should save the sales item
+            salesItemRepository.save(withAny(new ArrayList<SalesItem>())); times = 2;
+        }};
+    }
+
+	@Test
+	public void testCreateItemInQBO_MatchFound() throws Exception {
+		//
+		// Establish a set of test data
+		//
+
+		// Create a sales item
+		final SalesItem salesItem = new SalesItem("Shirt", "It's a shirt", Money.of(CurrencyUnit.USD, 5.00), "");
+		assertNull(salesItem.getQboId());
+		salesItem.setQtyOnHand(new BigDecimal(5.0));
+
+		// create a QBO item that matches on SalesItem name
+		final String qboItemID = "1";
+		final Item qboItem = new Item();
+		qboItem.setId(qboItemID);
+		qboItem.setName("Shirt");
+		qboItem.setDescription("It's a shirt");
+
+		// Create item query results
+		final QueryResult itemQueryResult = new QueryResult();
+		itemQueryResult.setEntities(Arrays.asList(qboItem));
+
+		// Non Strict expectations, generally just mocking collaborators
+		new NonStrictExpectations() {{
+			// The QBO gateway will try to acquire a data service instance
+			qboServiceFactory.getDataService(salesItem.getCompany());
+			result = dataService;
+
+			// The dataService will try to execute a query for income accounts
+			dataService.executeQuery(anyString);
+			result = itemQueryResult;
+
+			// The data service will not try to add the item to QBO
+			dataService.add(withAny(new Item())); times = 0;
+		}};
+
+        // Perform the actual operation under test
+        List<SalesItem> salesItems = new ArrayList<>();
+        salesItems.add(salesItem);
+        gateway.createItemsInQBO(salesItems);
+
+		// Explicitly verify things that SHOULD HAVE happened.
+		new Verifications() {{
+			// The salesItemRepository should save the sales item
+			salesItemRepository.save(withAny(company.getSalesItems()));
+
+			//Check that the qbo item ID was correctly assigned to the sales Item
+			assertEquals(qboItemID, salesItem.getQboId());
+		}};
+	}
+
+    @Test
+    public void testCreateCustomerInQBO_NoMatchFound() throws Exception {
+        //
+        // Establish a set of test data
+        //
+
+        final String qboCustomerID = "1";
+
+	    final QueryResult customerQueryResult = new QueryResult();
+	    customerQueryResult.setEntities(new ArrayList<IEntity>()); // intentionally empty
+
+        // Establish non-sequential expectations
+        // Mostly used for mocking collaborators
+        new NonStrictExpectations() {{
+            // The QBO gateway will try to acquire a data service instance
+            qboServiceFactory.getDataService(customer.getCompany());
+            result = dataService;
+
+	        dataService.executeQuery(anyString);
+	        result = customerQueryResult;
+
+            // The data service will execute a batch operation
+            dataService.executeBatch(withAny(new BatchOperation()));
+            result = new Delegate() {
+                void executeBatch(BatchOperation batchOperation) {
+                    com.intuit.ipp.data.Customer qboCustomer = new com.intuit.ipp.data.Customer();
+                    qboCustomer.setId(qboCustomerID);
+                    batchOperation.getEntityResult().put(Long.toString(customer.getId()), qboCustomer);
+                }
+            };
+
+        }};
+
+        // Perform the actual operation under test
+        gateway.createCustomersInQBO(company.getCustomers());
+
+        //Check that the qbo item ID was correctly assigned to the sales Item
+        assertEquals(customer.getQboId(), qboCustomerID);
+
+        new Verifications() {{
+            BatchOperation passedInBatch;
+
+            // Explicitly verify that dataService.add must be called with a parameter that matches certain requirements
+            dataService.executeBatch(passedInBatch = withCapture());
+
+            List<String> bIds = passedInBatch.getBIds();
+            assertEquals(1, bIds.size());
+
+            com.intuit.ipp.data.Customer passedInCustomer = (com.intuit.ipp.data.Customer) passedInBatch.getBatchItemRequests().get(0).getIntuitObject().getValue();
+
+            assertEquals(customer.getFirstName(), passedInCustomer.getGivenName());
+            assertEquals(customer.getLastName(), passedInCustomer.getFamilyName());
+            assertEquals(customer.getEmailAddress(), passedInCustomer.getPrimaryEmailAddr().getAddress());
+            assertEquals(customer.getPhoneNumber(), passedInCustomer.getPrimaryPhone().getFreeFormNumber());
+            PhysicalAddress mappedBillAddress = passedInCustomer.getBillAddr();
+            assertEquals(customer.getCity(), mappedBillAddress.getCity());
+            assertEquals(customer.getCountry(), mappedBillAddress.getCountry());
+            assertEquals(customer.getPostalCode(), mappedBillAddress.getPostalCode());
+            assertEquals(customer.getCountrySubDivisionCode(), mappedBillAddress.getCountrySubDivisionCode());
+            assertEquals(customer.getLine1(), mappedBillAddress.getLine1());
+            assertEquals(customer.getLine2(), mappedBillAddress.getLine2());
+            PhysicalAddress mappedShipAddress = passedInCustomer.getShipAddr();
+            assertEquals(customer.getCity(), mappedShipAddress.getCity());
+            assertEquals(customer.getCountry(), mappedShipAddress.getCountry());
+            assertEquals(customer.getPostalCode(), mappedShipAddress.getPostalCode());
+            assertEquals(customer.getCountrySubDivisionCode(), mappedShipAddress.getCountrySubDivisionCode());
+            assertEquals(customer.getLine1(), mappedShipAddress.getLine1());
+            assertEquals(customer.getLine2(), mappedShipAddress.getLine2());
+
+            // The salesItemRepository should save the sales item
+
+            customerRepository.save(withAny(company.getCustomers()));
+        }};
+    }
+
+	@Test
+	public void testCreateCustomerInQBO_MatchFound() throws Exception {
+		//
+		// Establish a set of test data
+		//
+		assertNull(customer.getQboId());
+
+		final String qboCustomerID = "10"; // intentionally choose a number other than 1
+		customer.setCompany(company);
+
+		// create existing, matching QBO customers
+		final com.intuit.ipp.data.Customer qboCustomer = new com.intuit.ipp.data.Customer();
+		qboCustomer.setGivenName("Bob");
+		qboCustomer.setFamilyName("Shmob");
+		qboCustomer.setId(qboCustomerID);
+
+		// Establish non-sequential expectations
+		// Mostly used for mocking collaborators
+		new NonStrictExpectations() {{
+			// The QBO gateway will try to acquire a data service instance
+			qboServiceFactory.getDataService(customer.getCompany());
+			result = dataService;
+
+			dataService.executeQuery(anyString);
+			QueryResult queryResult = new QueryResult();
+			queryResult.setEntities(Arrays.asList(qboCustomer));
+			result = queryResult;
+
+            // The data service will execute a batch operation
+            dataService.executeBatch(withAny(new BatchOperation()));
+            result = new Delegate() {
+                void executeBatch(BatchOperation batchOperation) {
+                    com.intuit.ipp.data.Customer qboCustomer = new com.intuit.ipp.data.Customer();
+                    qboCustomer.setId(qboCustomerID);
+                    batchOperation.getEntityResult().put(Long.toString(customer.getId()), qboCustomer);
+                }
+            };
+		}};
+
+		// Perform the actual operation under test
+		gateway.createCustomersInQBO(company.getCustomers());
+
+		new Verifications() {{
+			// add should not be called
+			dataService.add((IEntity)any); times = 0;
+
+			// The customerRepository should save the customer that has been updated w/the QBO ID
+			customerRepository.save(withAny(company.getCustomers()));
+
+			//Check that the qbo item ID was correctly assigned to the customer
+			assertEquals(qboCustomerID, customer.getQboId());
+		}};
+	}
+
+	@Test
+	public void testCreateSalesReceiptInQBO() throws Exception {
+		// Create a a shopping cart
+		final ShoppingCart shoppingCart = new ShoppingCart(customer);
+
+		// Create a list of items for the cart
+		List<CartItem> cartItems = new ArrayList<>();
+		CartItem cartItem = new CartItem();
+		SalesItem salesItem = new SalesItem("ItemType1","It's an item", Money.of(CurrencyUnit.USD, 5.00), "");
+		salesItem.setQboId("1");
+		cartItem.setSalesItem(salesItem);
+		cartItem.setQuantity(2);
+		cartItem.setShoppingCart(shoppingCart);
+		cartItems.add(cartItem);
+
+		cartItem = new CartItem();
+		salesItem = new SalesItem("ItemType2","It's another item", Money.of(CurrencyUnit.USD, 3.50), "");
+		salesItem.setQboId("2");
+		cartItem.setSalesItem(salesItem);
+		cartItem.setQuantity(1);
+		cartItem.setShoppingCart(shoppingCart);
+		cartItems.add(cartItem);
+		shoppingCart.setCartItems(cartItems);
+
+        final TaxCode taxCode = new TaxCode();
+        taxCode.setId("23");
+        taxCode.setName("California");
+        taxCode.setTaxable(true);
+        taxCode.setActive(true);
+        final QueryResult taxCodeQueryResult = new QueryResult();
+        taxCodeQueryResult.setEntities(Arrays.asList(taxCode));
+
+        PaymentMethod paymentMethod = new PaymentMethod();
+        paymentMethod.setName("Visa");
+        paymentMethod.setActive(true);
+        paymentMethod.setId("45");
+        paymentMethod.setType(PaymentMethodEnum.OTHER_CREDIT_CARD.value());
+        final QueryResult paymentMethodQueryResult = new QueryResult();
+        paymentMethodQueryResult.setEntities(Arrays.asList(paymentMethod));
+
+        final SalesReceipt receiptReturned = new SalesReceipt();
+        receiptReturned.setDocNumber("1001");
+
+		new NonStrictExpectations() {{
+			qboServiceFactory.getDataService(withAny(new Company()));
+			result = dataService;
+
+            dataService.executeQuery(String.format(QBOGateway.TAX_CODE_QUERY, taxCode.getName()));
+            result = taxCodeQueryResult;
+
+            dataService.executeQuery(String.format(QBOGateway.PAYMENT_METHOD_QUERY, "Visa"));
+            result = paymentMethodQueryResult;
+
+            dataService.add(withAny(new SalesReceipt()));
+            result =  receiptReturned;
+		}};
+
+		SalesReceipt createdReceipt = gateway.createSalesReceiptInQBO(shoppingCart, "");
+
+        assertEquals(
+                "The order confirmation shoud contain the receipt document number",
+                receiptReturned.getDocNumber(),
+                createdReceipt.getDocNumber());
+
+		new Verifications() {{
+            // Capture the sales receipt passed to the dataService
+			SalesReceipt receiptPassed;
+			dataService.add(receiptPassed = withCapture()); times = 1;
+
+            // Verify the makeup of the receipt
+			List<Line> lines = receiptPassed.getLine();
+			assertEquals(3, lines.size());
+			List<CartItem> cartItems = shoppingCart.getCartItems();
+
+			// The first two lines items of the sales receipt should be the items added
+			verifyLineForCartItem(lines.get(0), cartItems.get(0));
+			verifyLineForCartItem(lines.get(1), cartItems.get(1));
+
+			// The next line should be a discount
+			verifyLineForDiscount(lines.get(2), shoppingCart);
+
+            // The the customer reference should be set on the sales receipt
+			assertEquals(shoppingCart.getCustomer().getQboId(), receiptPassed.getCustomerRef().getValue());
+		}};
+	}	
+
+    private void verifyLineForCartItem(Line line, CartItem cartItem) {
+        assertEquals(LineDetailTypeEnum.SALES_ITEM_LINE_DETAIL, line.getDetailType());
+        SalesItemLineDetail lineDetail = line.getSalesItemLineDetail();
+        assertNotNull(
+                "There must be an item ref",
+                lineDetail.getItemRef());
+        assertNotNull(
+                "The item ref must have a value",
+                lineDetail.getItemRef().getValue());
+        assertEquals(
+                "The item ref should contain the Item QBO ID",
+                cartItem.getSalesItem().getQboId(),
+                lineDetail.getItemRef().getValue());
+        assertEquals(
+                "The unit prices should match",
+                cartItem.getSalesItem().getUnitPrice().getAmount(),
+                lineDetail.getUnitPrice());
+        assertEquals(
+                "The item quantities should match",
+                new BigDecimal(cartItem.getQuantity()),
+                lineDetail.getQty());
+        assertEquals(
+                "The line total should be cart item qty * unit price",
+                cartItem.getSalesItem().getUnitPrice().multipliedBy(cartItem.getQuantity()).getAmount(),
+                line.getAmount());
+        assertEquals(
+                "The item name should go on the sales receipt",
+                cartItem.getSalesItem().getName(),
+                line.getDescription());
+    }
+
+    private void verifyLineForDiscount(Line line, ShoppingCart shoppingCart) {
+        assertEquals(LineDetailTypeEnum.DISCOUNT_LINE_DETAIL, line.getDetailType());
+        DiscountLineDetail lineDetail = line.getDiscountLineDetail();
+        assertTrue(lineDetail.isPercentBased());
+        assertEquals(new BigDecimal(ShoppingCart.PROMOTION_MULTIPLIER * 100), lineDetail.getDiscountPercent());
+    }
+
+	private Account createAccount(String id, String accountName, String description, AccountTypeEnum accountType, AccountSubTypeEnum accountSubType) {
+		final Account cogAccount = new Account();
+		cogAccount.setId(id);
+		cogAccount.setName(accountName);
+		cogAccount.setDescription(description);
+		cogAccount.setAccountType(accountType);
+		cogAccount.setAccountSubType(accountSubType.value());
+		return cogAccount;
+	}
+
+	private ReferenceType createAccountRef(Account account) {
+		final ReferenceType accountRef = new ReferenceType();
+		accountRef.setValue(account.getId());
+		return accountRef;
+	}
+}
